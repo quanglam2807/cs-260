@@ -1,3 +1,5 @@
+# Quang Lam
+
 import sys
 import stack
 import nfastate
@@ -72,9 +74,75 @@ class NFA:
         # the new state in the self.states dictionary correctly. 
         ################################################################################################
 
-        def operate(op,opStack,stateStack):
+        def operate(op, opStack, stateStack):
             # replace pass with your code here
-            pass
+            
+            # If the given operator is a left paren we push it on the operator stack and return. 
+            if op.getOpChar() == '(':
+                opStack.push(op)
+                return
+
+            # while the precedence of the given operator is less than or equal to the precedence of the top operator on the operator stack we do the following
+            topOp = opStack.peek()
+            while op.precedence() <= topOp.precedence():
+                # Pop the top operator from the operator stack. Call this the topOp
+                topOpChar = opStack.pop().getOpChar()   
+                if topOpChar == '*':
+                    r1 = stateStack.pop()
+
+                    startStateId = newState()
+                    stopStateId = newState()
+                    
+                    startState = self.states[startStateId]
+                    stopState = self.states[stopStateId]
+                    
+                    startState.addTransition(epsilon, stopStateId)
+                    startState.addTransition(epsilon, r1[0])
+
+                    self.states[r1[1]].addTransition(epsilon, stopStateId)
+                    
+                    stopState.addTransition(epsilon, startStateId)
+
+                    stateStack.push((startStateId, stopStateId))
+                elif topOpChar == '|':
+                    r2 = stateStack.pop()
+                    r1 = stateStack.pop()
+
+                    startStateId = newState()
+                    stopStateId = newState()
+                    startState = self.states[startStateId]
+                    stopState = self.states[stopStateId]
+
+                    startState.addTransition(epsilon, r1[0])
+                    startState.addTransition(epsilon, r2[0])
+
+                    self.states[r1[1]].addTransition(epsilon, stopStateId)
+                    self.states[r2[1]].addTransition(epsilon, stopStateId)
+
+
+                    stateStack.push((startStateId, stopStateId))
+                elif topOpChar == '.':
+                    r2 = stateStack.pop()
+                    r1 = stateStack.pop()
+                    
+                    startStateId = newState()
+                    stopStateId = newState()
+                    startState = self.states[startStateId]
+                    stopState = self.states[stopStateId]
+
+                    startState.addTransition(epsilon, r1[0])
+                    self.states[r1[1]].addTransition(epsilon, r2[0])
+                    self.states[r2[1]].addTransition(epsilon, stopStateId)
+
+
+                    stateStack.push((startStateId, stopStateId))
+                else:
+                    break
+            
+            opStack.push(op)
+
+
+
 
         ################################################################################################
         # The evaluateRegExpression function is given the StreamReader called
@@ -94,20 +162,27 @@ class NFA:
 
         def evaluateRegExpression(reader):
             # replace pass with your code here
-            operatorStack = set('(')
-            operandStack = set('')
+            opStack = stack.Stack()
+            stateStack = stack.Stack()
+            opStack.push(Operator('('))
 
             opSet = set('()|.*')
+
             while not reader.peek(';'):
                 token = reader.getToken()
                 if token in opSet:
-                    operatorStack.push(('.'))
-                    # call operate
+                    op = Operator(token)
+                    operate(op, opStack, stateStack)
                 else:
                     # two new states start, stop
-                    startState = newState()
-                    stopState = stopState()
-                    operandStack.push((startState, stopState))
+                    startStateId = newState()
+                    stopStateId = newState()
+                    self.states[startStateId].addTransition(token, stopStateId)
+                    stateStack.push((startStateId, stopStateId))
+            
+            operate(Operator(')'), opStack, stateStack)
+            return (stateStack.pop())
+            
 
     
         ####################################################
