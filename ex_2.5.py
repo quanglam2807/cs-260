@@ -1,6 +1,7 @@
 # Quang Lam
 
 import sys
+import stack
 import state
 import nfastate
 import streamreader
@@ -28,18 +29,16 @@ class DFA:
         def newState():
             # Add a new state to the map of stateIds to states in the state map.
             # Return the new state id.
-            new_State = state.State(self.numStates)
-            self.states[self.numStates] = new_State
+            newState = state.State(self.numStates)
+            self.states[self.numStates] = newState
             self.numStates += 1
-            return new_State.getId()
+            return self.numStates - 1
 
         def getAcceptingTokenId(stateSet):
             # Return the first accepting tokenId found in the NFA state set. Otherwise, return None
-            for stateid in stateSet:
-                condition = nfa.states[stateid].isAccepting()
-                if condition:
-                    self.tokens[condition] = "Yes"
-                    return nfa.states[stateid].getAcceptsTokenId()
+            for stateId in stateSet:
+                if nfa.states[stateId].isAccepting():
+                    return nfa.states[stateId].getAcceptsTokenId()
 
             return None
 
@@ -48,7 +47,6 @@ class DFA:
             # Add to the closure set all NFA state Ids that are
             # in the epsilon closure of this stateSet. Then
             # return the OrderedFrozenSet of this closure set.
-            closureSet = orderedcollections.OrderedSet(stateSet)
             unexploredStates = orderedcollections.OrderedSet(stateSet)
 
             while len(unexploredStates) != 0:
@@ -56,7 +54,7 @@ class DFA:
                 toStates = nfa.states[stateID].onClassGoTo(epsilon)
 
                 for toStateID in toStates:
-                    if toStateID not in closureSet:
+                    if toStateID not in unexploredStates:
                         closureSet.add(toStateID)
                         unexploredStates.add(toStateID)
 
@@ -70,9 +68,10 @@ class DFA:
             toStates = orderedcollections.OrderedSet()
 
             for fromStateID in fromStates:
-                toStates.update(nfa.states[fromStateID].onClassGoTo(onClass))
+                for toStateID in nfa.states[fromStateID].onClassGoTo(onClass):
+                    toStates.add(toStateID)
 
-            return orderedcollections.OrderedSet(EPSclosure(toStates))
+            return orderedcollections.OrderedFrozenSet(toStates)
 
 
         def gatherClasses(states):
@@ -97,7 +96,6 @@ class DFA:
         self.startStateId = newState()
         self.stateMap = orderedcollections.OrderedMap()
 
-
         # Form the epsilon closure of the NFA start state (i.e. state 0) and then
         # map the start state of the DFA to the start state set of the NFA
 
@@ -119,33 +117,33 @@ class DFA:
         # in the DFA as you proceed.
 
         # Code goes here
-        EPSstartState = EPSclosure(orderedcollections.OrderedSet([self.startStateId]))
-        self.stateMap[self.startStateId] = EPSstartState
+        startDFASet = EPSclosure(orderedcollections.OrderedSet([self.startStateId]))
+        self.stateMap[self.startStateId] = startDFASet
+        if getAcceptingTokenId(startDFASet):
+            self.states[self.startStateId].setAccepting(True)
 
         unexploredStates = orderedcollections.OrderedSet([self.startStateId])
 
         nfa2dfa = orderedcollections.OrderedMap()
-        nfa2dfa[EPSstartState] = self.startStateId
-
-        self.tokens = orderedcollections.OrderedMap()
+        nfa2dfa[startDFASet] = self.startStateId
 
         while len(unexploredStates) > 0:
             currentStateID = unexploredStates.pop()
-            letters = gatherClasses(self.stateMap[currentStateID])
-            for letter in letters:
-                transitionsTo = orderedcollections.OrderedFrozenSet(
-                    nfaTransTo(self.stateMap[currentStateID], letter))
-                if transitionsTo not in nfa2dfa:
-                    toDFAStateID = newState()
-                    self.stateMap[toDFAStateID] = transitionsTo
-                    nfa2dfa[transitionsTo] = toDFAStateID
-                    if getAcceptingTokenId(transitionsTo):
-                        self.states[toDFAStateID].setAccepting(True)
-                    unexploredStates.add(toDFAStateID)
-                else:
-                    toDFAStateID = nfa2dfa[transitionsTo]
+            classes = gatherClasses(self.stateMap[currentStateID])
+            for onClass in classes:
+                toSet = nfaTransTo(self.stateMap[currentStateID], onClass)
+                if toSet not in nfa2dfa:
+                    newDFAStateId = newState()
+                    self.stateMap[newDFAStateId] = toSet
+                    nfa2dfa[toSet] = newDFAStateId
+                    if getAcceptingTokenId(toSet):
+                        self.states[newDFAStateId].setAccepting(True)
+                    unexploredStates.add(newDFAStateId)
 
-                self.states[currentStateID].addTransition(letter, toDFAStateID)
+                    self.states[currentStateID].addTransition(onClass, newDFAStateId)
+                else:
+                    dfaStateId = nfa2dfa[toSet]
+                    self.states[currentStateID].addTransition(onClass, dfaStateId)
 
 
 
@@ -178,10 +176,10 @@ class DFA:
 
 def main():
 
-    classes = {epsilon:frozenset([]), "zero":frozenset([0]), "one": frozenset([1])}
+    classes = { epsilon: frozenset([]), "a": frozenset(["a"]) }
 
-    q0 = nfastate.NFAState(0)
-    q1 = nfastate.NFAState(1)
+    q0 = nfastate.NFAState(0, True)
+    q1 = nfastate.NFAState(1, True)
     q2 = nfastate.NFAState(2)
     q3 = nfastate.NFAState(3)
     q4 = nfastate.NFAState(4, True)
@@ -189,29 +187,36 @@ def main():
     q6 = nfastate.NFAState(6)
     q7 = nfastate.NFAState(7)
     q8 = nfastate.NFAState(8)
-    q9 = nfastate.NFAState(9)
-    q10 = nfastate.NFAState(10, True)
 
     q0.addTransition(epsilon, 1)
-    q0.addTransition(epsilon, 5)
+    q0.addTransition(epsilon, 4)
+
     q1.addTransition("a", 2)
     q2.addTransition("a", 3)
-    q3.addTransition("a", 4)
-    q4.addTransition("a", 2)
+    q3.addTransition("a", 1)
+
+    q4.addTransition("a", 5)
     q5.addTransition("a", 6)
     q6.addTransition("a", 7)
     q7.addTransition("a", 8)
-    q8.addTransition("a", 9)
-    q9.addTransition("a", 10)
-    q10.addTransition("a", 6)
+    q8.addTransition("a", 4)
 
-    states = {0: q0, 1: q1, 2: q2, 3: q3, 4: q4, 5: q5, 6: q6, 7: q7, 8: q8, 9: q9, 10: q10}
+    states = { 
+        0: q0,
+        1: q1,
+        2: q2,
+        3: q3,
+        4: q4,
+        5: q5,
+        6: q6,
+        7: q7,
+        8: q8
+    }
 
     nfa = NFA(classes, states)
 
     dfa = DFA()
     dfa.buildFromNFA(nfa)
     dfa.writeListing(sys.stdout)
-
 
 main()
