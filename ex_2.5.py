@@ -71,7 +71,7 @@ class DFA:
                 for toStateID in nfa.states[fromStateID].onClassGoTo(onClass):
                     toStates.add(toStateID)
 
-            return orderedcollections.OrderedFrozenSet(toStates)
+            return orderedcollections.OrderedFrozenSet(EPSclosure(toStates))
 
 
         def gatherClasses(states):
