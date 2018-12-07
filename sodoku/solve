@@ -1,0 +1,4 @@
+#!/bin/bash
+python3 sudoku_to_dimacs.py $1
+minisat sudoku.dimacs sudoku.sln
+cat sudoku.sln | python3 displaysolution.py 

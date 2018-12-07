@@ -1,0 +1,31 @@
+; Quang Lam
+; Solving a^nb^nc^n
+
+; State 0: get a
+0 a x r 1
+0 b b * halt-reject
+0 c c * halt-reject
+0 x x r 0
+
+; State 1: get b
+1 a a r 1
+1 b y r 2
+1 c c * halt-reject
+1 y y r 1
+1 z z * halt-reject
+
+; State 2: get c
+2 a a * halt-reject
+2 b b r 2
+2 c z r 3
+2 z z r 2
+
+; State 3: back to start
+3 $ * * halt-accept
+3 a a l 3
+3 b b l 3
+3 c c l 3
+3 x x l 3
+3 y y l 3
+3 z z l 3
+3 _ _ r 0
